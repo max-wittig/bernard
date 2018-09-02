@@ -1,0 +1,7 @@
+[package]
+name = "network-tracker"
+version = "0.1.0"
+authors = ["Max Wittig <max.wittig95@gmail.com>"]
+
+[dependencies]
+pnet = "*"
