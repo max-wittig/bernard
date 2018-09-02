@@ -5,3 +5,5 @@ authors = ["Max Wittig <max.wittig95@gmail.com>"]
 
 [dependencies]
 pnet = "*"
+ipnetwork = "*"
+tokio-ping = "*"

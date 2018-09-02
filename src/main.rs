@@ -1,4 +1,8 @@
 mod scanner;
+extern crate pnet;
+extern crate ipnetwork;
+extern crate tokio_ping;
+
 use scanner::Scanner;
 
 fn main() {
