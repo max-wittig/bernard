@@ -6,4 +6,8 @@ authors = ["Max Wittig <max.wittig95@gmail.com>"]
 [dependencies]
 pnet = "*"
 ipnetwork = "*"
-tokio-ping = "*"
+serde = "*"
+serde_yaml = "*"
+serde_derive = "*"
+xml-rs = "*"
+tempfile = "*"
