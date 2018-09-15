@@ -1,41 +1,26 @@
-use std::net::IpAddr;
-use std::net::Ipv4Addr;
-use pnet::datalink;
-use std::str::FromStr;
+use HashMap;
 use ipnetwork::Ipv4Network;
-use pnet::packet::icmp::echo_request::EchoRequest;
-use std::process::Command;
-use tempfile::NamedTempFile;
-use std::io::Read;
-
-#[macro_use]
-use std::vec;
+use pnet::datalink;
 use std::io::BufReader;
+use std::io::Read;
+use std::net::IpAddr;
+use std::process::Command;
+use std::vec;
+use tempfile::NamedTempFile;
 use xml::reader::{EventReader, XmlEvent};
 
-pub struct Scanner {
-
-}
-
-#[derive(Debug)]
-pub struct Device {
-    ip_address: IpAddr,
-    name: String,
-    mac: String,
-    owner: String,
-    online: bool,
-}
+pub struct Scanner {}
 
 #[derive(Debug, Clone)]
-struct Host {
+struct Device {
     ip: String,
     hostname: String,
     mac: String,
 }
 
-impl Host {
-    pub fn new() -> Host {
-        Host {
+impl Device {
+    pub fn new() -> Device {
+        Device {
             ip: String::new(),
             hostname: String::new(),
             mac: String::new(),
@@ -56,41 +41,34 @@ impl Host {
 }
 
 impl Scanner {
-    fn people_online(mac_address: &str)  {
-        // scan all devices from people that are contained in xml
-    }
-
-    pub fn parse_nmap_xml(&self) {
-        let mut file = NamedTempFile::new().unwrap();
+    fn get_devices(&self, cidr: &str) -> Vec<Device> {
+        let file = NamedTempFile::new().unwrap();
         let path = file.path().to_str().clone().unwrap().to_string();
         let result = Command::new("nmap")
-            //.arg("-sL")
-            .arg("-sT")
-            .arg("--disable-arp-ping")
-            .arg("-v")
-            .arg("192.168.178.*")
+            .arg("-sL")
+            //.arg("-sT")
+            //.arg("-sn")
+            //.arg("-F")
+            //.arg("-p")
+            //.arg("*")
+            //.arg("--disable-arp-ping")
+            .arg(cidr)
             .arg("-oX")
             .arg(path)
             .output().unwrap();
-        if false {
-            let mut s = String::new();
-            file.read_to_string(&mut s).unwrap();
-            println!("{}", s);
-            return;
-        }
 
-        let mut buf_reader = BufReader::new(file.as_file());
+        let buf_reader = BufReader::new(file.as_file());
         let xml_reader = EventReader::new(buf_reader);
 
-        let mut hosts: Vec<Host> = vec!();
-        let mut current_host: Option<Host> = None;
+        let mut hosts: Vec<Device> = vec!();
+        let mut current_host: Option<Device> = None;
         let mut is_online: bool = false;
         for entry in xml_reader {
             match entry {
                 Ok(XmlEvent::StartElement { name, attributes, .. }) => {
                     if name.local_name.eq("host") {
                         //println!("Start{:?}", attributes);
-                        current_host = Some(Host::new());
+                        current_host = Some(Device::new());
                     }
                     let host = match &mut current_host {
                         Some(x) => x,
@@ -134,10 +112,6 @@ impl Scanner {
                 }
                 Ok(XmlEvent::EndElement { name }) => {
                     if name.local_name.eq("host") {
-                        let host = match &current_host {
-                            Some(x) => x,
-                            None => panic!("Invalid xml!"),
-                        };
                         if is_online {
                             hosts.push(current_host.clone().unwrap());
                         }
@@ -155,44 +129,48 @@ impl Scanner {
 
             }
         }
-        println!("{:?}", hosts);
+        hosts
     }
 
     pub fn new() -> Scanner {
         Scanner{}
     }
 
-    pub fn scan_devices(&self, gateway : &str) -> Vec<Device> {
-        println!("{}", gateway);
-        self.parse_nmap_xml();
-        /*
-        // scan devices over all interfaces
-        for interface in datalink::interfaces().iter() {
+    fn get_interfaces(&self) -> Vec<Ipv4Network> {
+        let mut interfaces: Vec<Ipv4Network> = vec!();
+        for interface in datalink::interfaces() {
             //println!("Available interfaces: {:?}", interface);
             let ipv4_address = match interface.ips[0].ip() {
                 IpAddr::V4(ip) => ip,
-                _ => panic!("Invalid address"),
+                _ => continue,
             };
-
             let network = match Ipv4Network::new(ipv4_address, interface.ips[0].prefix()) {
-                Ok(T) => T,
-                Err(_) => panic!("Error, while getting network addresses"),
+                Ok(x) => x,
+                Err(_) => continue,
             };
+            interfaces.push(network);
+        }
+        interfaces
+    }
 
-            for address in network.iter() {
-                // is_reachable(&address);
-                // println!("{:?}", &address);
+    pub fn get_people_online(&self, people_map: &HashMap<String, Vec<String>>) {
+        let interfaces: Vec<Ipv4Network> = self.get_interfaces();
+        for iface in interfaces {
+            let online_devices = self.get_devices(format!("{}/{}", iface.network(), iface.prefix()).as_str());
+            let online_macs: Vec<String> = online_devices.iter().map(|x| x.mac.clone()).collect();
+            for person in people_map {
+                for mac in person.1 {
+                    let mac = mac.to_ascii_uppercase();
+                    println!("{:?}", mac);
+                    println!("{:?}", online_macs);
+                    println!("{:?}", person.0);
+                    if online_macs.contains(&mac) {
+                        println!("{} is there", person.0);
+                        break;
+                    }
+                }
             }
         }
-*/
-        let test_device = Device {
-            ip_address: IpAddr::V4(Ipv4Addr::new(192, 168, 178, 22)),
-            name: String::from("Test"),
-            mac: String::from("RandomMAC"),
-            owner: String::from("Test"),
-            online: false,
-        };
 
-        vec!(test_device)
     }
 }
