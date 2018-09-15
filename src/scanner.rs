@@ -28,30 +28,30 @@ pub struct Device {
 
 #[derive(Debug, Clone)]
 struct Host {
-    status: String,
-    address: String,
+    ip: String,
     hostname: String,
+    mac: String,
 }
 
 impl Host {
     pub fn new() -> Host {
         Host {
-            status: String::new(),
-            address: String::new(),
+            ip: String::new(),
             hostname: String::new(),
+            mac: String::new(),
         }
     }
 
-    pub fn set_status(&mut self, status: String) {
-        self.status = status
-    }
-
-    pub fn set_address(&mut self, address: String) {
-        self.address = address
+    pub fn set_ip(&mut self, ip: String) {
+        self.ip = ip;
     }
 
     pub fn set_hostname(&mut self, hostname: String) {
-        self.hostname = hostname
+        self.hostname = hostname;
+    }
+
+    pub fn set_mac(&mut self, mac: String) {
+        self.mac = mac;
     }
 }
 
@@ -64,17 +64,27 @@ impl Scanner {
         let mut file = NamedTempFile::new().unwrap();
         let path = file.path().to_str().clone().unwrap().to_string();
         let result = Command::new("nmap")
-            .arg("-sL")
+            //.arg("-sL")
+            .arg("-sT")
+            .arg("--disable-arp-ping")
+            .arg("-v")
             .arg("192.168.178.*")
             .arg("-oX")
             .arg(path)
             .output().unwrap();
+        if false {
+            let mut s = String::new();
+            file.read_to_string(&mut s).unwrap();
+            println!("{}", s);
+            return;
+        }
+
         let mut buf_reader = BufReader::new(file.as_file());
         let xml_reader = EventReader::new(buf_reader);
 
-        let mut depth = 0;
         let mut hosts: Vec<Host> = vec!();
         let mut current_host: Option<Host> = None;
+        let mut is_online: bool = false;
         for entry in xml_reader {
             match entry {
                 Ok(XmlEvent::StartElement { name, attributes, .. }) => {
@@ -84,45 +94,54 @@ impl Scanner {
                     }
                     let host = match &mut current_host {
                         Some(x) => x,
-                        None => panic!("Invalid xml!"),
-                        _ => panic!("Invalid xml!"),
+                        None => continue,
                     };
                     if name.local_name.eq("status") {
-                        //println!("Start{:?}", attributes);
-                        for attr in attributes {
+                        for attr in &attributes {
                             if attr.name.local_name.eq("state") {
-                                host.set_status(attr.value);
+                                if attr.value.eq("up") {
+                                    is_online = true;
+                                }
                             }
                         }
                     }
                     if name.local_name.eq("address") {
-                        for attr in attributes {
+                        let mut addr_type: Option<String> = None;
+                        let mut addr: Option<String> = None;
+                        for attr in &attributes {
                             if attr.name.local_name.eq("addr") {
-                                host.set_address(attr.value);
+                                addr = Some(attr.value.clone());
+                            }
+                            if attr.name.local_name.eq("addrtype") {
+                                addr_type = Some(attr.value.clone());
+                            }
+                        }
+
+                        match addr_type {
+                            Some(ref x) if x.eq("mac") => host.set_mac(addr.unwrap()),
+                            Some(ref x) if x.eq("ipv4") => host.set_ip(addr.unwrap()),
+                            _ => (),
+                        }
+                    }
+                    if name.local_name.eq("hostname") {
+                        for attr in attributes {
+                            if attr.name.local_name.eq("name") {
+                                host.set_hostname(attr.value.clone());
                             }
                         }
                     }
-                    if name.local_name.eq("hostnames") {
-                        for attr in attributes {
-                            if attr.name.local_name.eq("addr") {
-                                host.set_address(attr.value);
-                            }
-                        }
-                    }
-                    depth += 1;
                     continue
                 }
                 Ok(XmlEvent::EndElement { name }) => {
-                    depth -= 1;
                     if name.local_name.eq("host") {
                         let host = match &current_host {
                             Some(x) => x,
                             None => panic!("Invalid xml!"),
                         };
-                        println!("{}", host.status);
-                        if host.status.eq("up") {
+                        if is_online {
                             hosts.push(current_host.clone().unwrap());
                         }
+                        is_online = false;
                     }
                     //current_host
                     //println!("End{}-{}", depth, name);
