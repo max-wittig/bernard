@@ -6,6 +6,7 @@ use std::io::Read;
 use std::net::IpAddr;
 use std::process::Command;
 use std::vec;
+use std::fmt;
 use tempfile::NamedTempFile;
 use xml::reader::{EventReader, XmlEvent};
 
@@ -44,18 +45,12 @@ impl Scanner {
     fn get_devices(&self, cidr: &str) -> Vec<Device> {
         let file = NamedTempFile::new().unwrap();
         let path = file.path().to_str().clone().unwrap().to_string();
-        let result = Command::new("nmap")
-            .arg("-sL")
-            //.arg("-sT")
-            //.arg("-sn")
-            //.arg("-F")
-            //.arg("-p")
-            //.arg("*")
-            //.arg("--disable-arp-ping")
-            .arg(cidr)
+        Command::new("nmap")
+            .arg("-sn")
+            .arg("192.168.178.28/24")
             .arg("-oX")
             .arg(path)
-            .output().unwrap();
+        .output().expect("Error, while running nmap");
 
         let buf_reader = BufReader::new(file.as_file());
         let xml_reader = EventReader::new(buf_reader);
@@ -117,8 +112,6 @@ impl Scanner {
                         }
                         is_online = false;
                     }
-                    //current_host
-                    //println!("End{}-{}", depth, name);
                     continue
                 }
                 Err(e) => {
@@ -153,24 +146,25 @@ impl Scanner {
         interfaces
     }
 
-    pub fn get_people_online(&self, people_map: &HashMap<String, Vec<String>>) {
+    pub fn get_people_online(&self, people_map: &HashMap<String, Vec<String>>) -> Vec<String> {
+        let mut people_online: Vec<String> = vec!();
         let interfaces: Vec<Ipv4Network> = self.get_interfaces();
         for iface in interfaces {
+            info!("Scanning over interface {:?}", iface);
             let online_devices = self.get_devices(format!("{}/{}", iface.network(), iface.prefix()).as_str());
             let online_macs: Vec<String> = online_devices.iter().map(|x| x.mac.clone()).collect();
             for person in people_map {
                 for mac in person.1 {
                     let mac = mac.to_ascii_uppercase();
-                    println!("{:?}", mac);
-                    println!("{:?}", online_macs);
-                    println!("{:?}", person.0);
                     if online_macs.contains(&mac) {
-                        println!("{} is there", person.0);
+                        if !people_online.contains(person.0) {
+                            people_online.push(person.0.clone());
+                        }
                         break;
                     }
                 }
             }
         }
-
+        people_online
     }
 }

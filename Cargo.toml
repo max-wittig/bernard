@@ -11,3 +11,9 @@ serde_yaml = "*"
 serde_derive = "*"
 xml-rs = "*"
 tempfile = "*"
+log = "*"
+hyper-native-tls = "*"
+reqwest = "*"
+
+[dependencies.prometheus]
+features = ["push"]
