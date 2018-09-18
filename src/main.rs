@@ -9,16 +9,20 @@ extern crate stderrlog;
 extern crate structopt;
 extern crate tempfile;
 extern crate xml;
+extern crate eui48;
 
 use prometheus::{Encoder, GaugeVec, Opts, Registry, TextEncoder};
 use scanner::Scanner;
 use std::collections::HashMap;
+use std::env;
 use std::fmt;
 use std::fmt::Display;
 use std::fs::File;
 use std::io::prelude::*;
 use std::io::Read;
+use std::process::exit;
 use structopt::StructOpt;
+use eui48::MacAddress;
 
 mod scanner;
 
@@ -45,9 +49,29 @@ impl From<serde_yaml::Error> for ConfigError {
     }
 }
 
+enum ExitCodes {
+    RootRequired = 1,
+    ConfigInvalid = 2,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 struct Config {
     people: HashMap<String, Vec<String>>,
+}
+
+impl Config {
+    fn is_valid(&self) -> bool {
+        // check if mac addresses are valid
+        for person in &self.people {
+            for address in person.1 {
+                match MacAddress::parse_str(address.as_str()) {
+                    Ok(r) => r,
+                    Err(_) => return false,
+                };
+            }
+        }
+        true
+    }
 }
 
 fn get_config(filename: &str) -> Result<Config, ConfigError> {
@@ -63,8 +87,8 @@ fn get_config(filename: &str) -> Result<Config, ConfigError> {
 struct Opt {
     #[structopt(short = "q", long = "quiet")]
     quiet: bool,
-    /// Verbose mode (-v, -vv, -vvv, etc)
-    #[structopt(short = "v", long = "verbose", parse(from_occurrences))]
+    /// Verbose mode (-v, -vv, -vvvvv, etc)
+    #[structopt(short = "v", long = "verbose", default_value = "v", parse(from_occurrences))]
     verbose: usize,
     /// Timestamp (sec, ms, ns, none)
     #[structopt(short = "t", long = "timestamp")]
@@ -72,10 +96,19 @@ struct Opt {
     /// Path to config file
     #[structopt(short = "c", long = "config")]
     config: String,
-    /// IP in CIDR notation of the network you want to scan, e.g. 192.168.178.28/24
+    /// CIDR notation of the network you want to scan, e.g. 192.168.178.1/24
     #[structopt(short = "n", long = "network")]
     network: String,
 }
+
+fn is_root() -> bool {
+    match env::var("USER") {
+        Ok(ref val) if val.eq("root") => true,
+        Ok(_) => false,
+        Err(e) => false,
+    }
+}
+
 
 fn main() {
     let opt = Opt::from_args();
@@ -86,8 +119,15 @@ fn main() {
         .timestamp(opt.ts.unwrap_or(stderrlog::Timestamp::Off))
         .init()
         .unwrap();
-
+    if !is_root() {
+        error!("This program needs to be run as root!");
+        exit(ExitCodes::RootRequired as i32);
+    }
     let config = get_config(&opt.config).expect("Could not read config file!");
+    if !config.is_valid() {
+        error!("Config is invalid. Please make sure that only valid MAC addresses are used!");
+        exit(ExitCodes::ConfigInvalid as i32);
+    }
     info!("Config loaded");
     let scanner = Scanner::new(&opt.network);
     info!("Running nmap to detect devices...");

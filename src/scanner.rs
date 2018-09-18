@@ -1,16 +1,18 @@
-use HashMap;
+use std::collections::HashMap;
 use std::io::BufReader;
 use std::process::Command;
+use std::net::Ipv4Addr;
+
 use tempfile::NamedTempFile;
 use xml::reader::{EventReader, XmlEvent};
 
 pub struct Scanner {
-    cidr: String
+    cidr: String,
 }
 
 #[derive(Debug, Clone)]
 struct Device {
-    ip: String,
+    ip: Option<Ipv4Addr>,
     hostname: String,
     mac: String,
 }
@@ -18,14 +20,14 @@ struct Device {
 impl Device {
     pub fn new() -> Device {
         Device {
-            ip: String::new(),
+            ip: None,
             hostname: String::new(),
             mac: String::new(),
         }
     }
 
-    pub fn set_ip(&mut self, ip: String) {
-        self.ip = ip;
+    pub fn set_ip(&mut self, ip: Option<Ipv4Addr>) {
+        self.ip = ip
     }
 
     pub fn set_hostname(&mut self, hostname: String) {
@@ -42,7 +44,11 @@ impl Scanner {
         let file = NamedTempFile::new().unwrap();
         let path = file.path().to_str().unwrap().to_string();
         Command::new("nmap")
-            .arg("-sF")
+            .arg("-sn")
+            .arg("-PS")
+            .arg("-n")
+            .arg("-T")
+            .arg("4")
             .arg(self.cidr.as_str())
             .arg("-oX")
             .arg(path)
@@ -79,21 +85,29 @@ impl Scanner {
                     if name.local_name.eq("address") {
                         let mut addr_type: Option<String> = None;
                         let mut addr: Option<String> = None;
+                        let mut ip_addr: Option<Ipv4Addr> = None;
+                        let mut mac_addr: Option<String> = None;
                         for attr in &attributes {
                             if attr.name.local_name.eq("addr") {
                                 addr = Some(attr.value.clone());
-                            }
-                            if attr.name.local_name.eq("addrtype") {
+                            } else if attr.name.local_name.eq("addrtype") {
                                 addr_type = Some(attr.value.clone());
                             }
                         }
-                        debug!("Found address for host");
 
                         match addr_type {
                             Some(ref x) if x.eq("mac") => host.set_mac(addr.unwrap()),
-                            Some(ref x) if x.eq("ipv4") => host.set_ip(addr.unwrap()),
+                            Some(ref x) if x.eq("ipv4") => {
+                                // check if address is really an Ipv4Addr
+                                ip_addr = match x.clone().parse() {
+                                    Ok(a) => Some(a),
+                                    Err(_) => None, //TODO: throw xml error
+                                };
+                                host.set_ip(ip_addr)
+                            },
                             _ => (),
                         }
+                        debug!("Found address for host");
                     }
                     if name.local_name.eq("hostname") {
                         for attr in attributes {
@@ -124,7 +138,7 @@ impl Scanner {
 
     pub fn new(cidr: &str) -> Scanner {
         Scanner {
-            cidr: cidr.to_string()
+            cidr: cidr.to_string(),
         }
     }
 
