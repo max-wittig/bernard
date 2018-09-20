@@ -47,8 +47,6 @@ impl Scanner {
             .arg("-sn")
             .arg("-PS")
             .arg("-n")
-            .arg("-T")
-            .arg("4")
             .arg(self.cidr.as_str())
             .arg("-oX")
             .arg(path)

@@ -4,12 +4,12 @@ extern crate prometheus;
 #[macro_use]
 extern crate serde_derive;
 extern crate serde_yaml;
-extern crate stderrlog;
 #[macro_use]
 extern crate structopt;
 extern crate tempfile;
 extern crate xml;
 extern crate eui48;
+extern crate simplelog;
 
 use prometheus::{Encoder, GaugeVec, Opts, Registry, TextEncoder};
 use scanner::Scanner;
@@ -23,6 +23,7 @@ use std::io::Read;
 use std::process::exit;
 use structopt::StructOpt;
 use eui48::MacAddress;
+use simplelog::{CombinedLogger, TermLogger, LevelFilter};
 
 mod scanner;
 
@@ -90,9 +91,6 @@ struct Opt {
     /// Verbose mode (-v, -vv, -vvvvv, etc)
     #[structopt(short = "v", long = "verbose", default_value = "v", parse(from_occurrences))]
     verbose: usize,
-    /// Timestamp (sec, ms, ns, none)
-    #[structopt(short = "t", long = "timestamp")]
-    ts: Option<stderrlog::Timestamp>,
     /// Path to config file
     #[structopt(short = "c", long = "config")]
     config: String,
@@ -112,13 +110,12 @@ fn is_root() -> bool {
 
 fn main() {
     let opt = Opt::from_args();
-    stderrlog::new()
-        .module(module_path!())
-        .quiet(opt.quiet)
-        .verbosity(opt.verbose)
-        .timestamp(opt.ts.unwrap_or(stderrlog::Timestamp::Off))
-        .init()
-        .unwrap();
+    CombinedLogger::init(
+        vec![
+            TermLogger::new(LevelFilter::Info, simplelog::Config::default()).unwrap(),
+        ]
+    ).unwrap();
+
     if !is_root() {
         error!("This program needs to be run as root!");
         exit(ExitCodes::RootRequired as i32);
@@ -162,7 +159,7 @@ fn write_metrics_file(people: &HashMap<String, f64>) {
     let encoder = TextEncoder::new();
     let metric_families = r.gather();
     encoder.encode(&metric_families, &mut buffer).unwrap();
-    info!("Exporter file: {}", String::from_utf8(buffer.clone()).unwrap());
+    debug!("Exporter file: {}", String::from_utf8(buffer.clone()).unwrap());
     let mut out_file = File::create("metrics.txt").unwrap();
     out_file
         .write_all(String::from_utf8(buffer).unwrap().as_bytes())
