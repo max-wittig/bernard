@@ -11,10 +11,11 @@ pub struct Scanner {
 }
 
 #[derive(Debug, Clone)]
-struct Device {
-    ip: Option<Ipv4Addr>,
-    hostname: String,
-    mac: String,
+pub struct Device {
+    pub ip: Option<Ipv4Addr>,
+    pub hostname: String,
+    pub mac: String,
+    pub owner: String,
 }
 
 impl Device {
@@ -23,6 +24,7 @@ impl Device {
             ip: None,
             hostname: String::new(),
             mac: String::new(),
+            owner: String::new(),
         }
     }
 
@@ -37,6 +39,10 @@ impl Device {
     pub fn set_mac(&mut self, mac: String) {
         self.mac = mac;
     }
+
+    pub fn set_owner(&mut self, owner: String) {
+        self.owner = owner;
+    }
 }
 
 impl Scanner {
@@ -46,7 +52,6 @@ impl Scanner {
         Command::new("nmap")
             .arg("-sn")
             .arg("-PS")
-            .arg("-n")
             .arg(self.cidr.as_str())
             .arg("-oX")
             .arg(path)
@@ -111,6 +116,8 @@ impl Scanner {
                         for attr in attributes {
                             if attr.name.local_name.eq("name") {
                                 host.set_hostname(attr.value.clone());
+                                debug!("Hostname set!");
+                                break;
                             }
                         }
                     }
@@ -140,21 +147,20 @@ impl Scanner {
         }
     }
 
-    pub fn get_people_online(&self, people_map: &HashMap<String, Vec<String>>) -> Vec<String> {
-        let mut people_online: Vec<String> = vec![];
-        let online_devices = self.get_devices();
-        let online_macs: Vec<String> = online_devices.iter().map(|x| x.mac.clone()).collect();
+    pub fn get_people_online(&self, people_map: &HashMap<String, Vec<String>>) -> Vec<Device> {
+        let mut online_devices = self.get_devices();
         for person in people_map {
             for mac in person.1 {
                 let mac = mac.to_ascii_uppercase();
-                if online_macs.contains(&mac) {
-                    if !people_online.contains(person.0) {
-                        people_online.push(person.0.clone());
+                for device in online_devices.iter_mut() {
+                    if mac.eq(&device.mac.to_ascii_uppercase()) {
+                        // found device, assign owner
+                        device.set_owner(person.0.clone());
+                        info!("Setting owner for device {} to {}", &device.mac, person.0);
                     }
-                    break;
                 }
             }
         }
-        people_online
+        online_devices
     }
 }

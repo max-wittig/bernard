@@ -30,6 +30,7 @@ mod scanner;
 #[derive(Debug, Serialize, Deserialize)]
 enum ConfigError {
     ReadError,
+    ParseError,
 }
 
 impl Display for ConfigError {
@@ -52,7 +53,8 @@ impl From<serde_yaml::Error> for ConfigError {
 
 enum ExitCodes {
     RootRequired = 1,
-    ConfigInvalid = 2,
+    ConfigFileDoesNotExist = 2,
+    ConfigInvalid = 3,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -79,7 +81,12 @@ fn get_config(filename: &str) -> Result<Config, ConfigError> {
     let mut file = File::open(&filename)?;
     let mut file_content = String::new();
     file.read_to_string(&mut file_content)?;
-    Ok(serde_yaml::from_str(&file_content)?)
+    let config:Config = serde_yaml::from_str(&file_content)?;
+    if config.is_valid() {
+        Ok(config)
+    } else {
+        Err(ConfigError::ParseError)
+    }
 }
 
 /// Network-scanner
@@ -120,17 +127,26 @@ fn main() {
         error!("This program needs to be run as root!");
         exit(ExitCodes::RootRequired as i32);
     }
-    let config = get_config(&opt.config).expect("Could not read config file!");
-    if !config.is_valid() {
-        error!("Config is invalid. Please make sure that only valid MAC addresses are used!");
-        exit(ExitCodes::ConfigInvalid as i32);
-    }
+    let config = match get_config(&opt.config) {
+        Ok(r) => r,
+        Err(ConfigError::ParseError) => {
+            error!("Config is invalid. Please make sure that only valid MAC addresses are used!");
+            exit(ExitCodes::ConfigInvalid as i32);
+        }
+        Err(ConfigError::ReadError) => {
+            error!("Config file does not exist at the given location!");
+            exit(ExitCodes::ConfigFileDoesNotExist as i32);
+        }
+    };
     info!("Config loaded");
     let scanner = Scanner::new(&opt.network);
     info!("Running nmap to detect devices...");
-    let people_online = scanner.get_people_online(&config.people);
+    let devices_online = scanner.get_people_online(&config.people);
+    let people_online: Vec<String> = devices_online
+        .iter()
+        .map(|d| d.owner.clone())
+        .filter(|o| !o.is_empty()).collect();
     info!("Online: {}", people_online.join(", "));
-    //let people_online = vec!("max".to_string(), "nadia".to_string());
     let mut people_status_map: HashMap<String, f64> = HashMap::new();
     for person in config.people {
         if people_online.contains(&person.0) {
@@ -139,19 +155,26 @@ fn main() {
             people_status_map.insert(person.0.clone(), 0.0);
         }
     }
-    write_metrics_file(&people_status_map);
+    write_metrics_file(&people_status_map, &devices_online);
 }
 
-fn write_metrics_file(people: &HashMap<String, f64>) {
+fn write_metrics_file(people: &HashMap<String, f64>, devices: &Vec<scanner::Device>) {
     let r = Registry::new();
-    let gauge_vec_opts = Opts::new("people", "People online status");
+    let people_gauge_vec_opts = Opts::new("people", "People online status");
+    let devices_gauge_vec_opts = Opts::new("devices", "Devices with status");
 
-    let gauge_vec: GaugeVec = GaugeVec::new(gauge_vec_opts, &["name"]).unwrap();
-    r.register(Box::new(gauge_vec.clone())).unwrap();
+    let people_gauge_vec: GaugeVec = GaugeVec::new(people_gauge_vec_opts, &["name"]).unwrap();
+    let devices_gauge_vec: GaugeVec = GaugeVec::new(devices_gauge_vec_opts, &["hostname", "mac"]).unwrap();
+    r.register(Box::new(people_gauge_vec.clone())).unwrap();
+    r.register(Box::new(devices_gauge_vec.clone())).unwrap();
     for person in people {
-        gauge_vec
+        people_gauge_vec
             .with_label_values(&[person.0.as_str()])
             .set(*person.1);
+    }
+    for device in devices {
+        devices_gauge_vec.with_label_values(&[device.hostname.as_str(), device.mac.as_str()])
+            .set(1.0); // all devices found must be online
     }
 
     // Gather the metrics.
