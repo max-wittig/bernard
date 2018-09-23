@@ -153,14 +153,14 @@ impl Scanner {
 
     pub fn get_labels_online(&self, label_map: &HashMap<String, Vec<String>>) -> Vec<Device> {
         let mut online_devices = self.get_devices();
-        for person in label_map {
-            for mac in person.1 {
+        for label in label_map {
+            for mac in label.1 {
                 let mac = mac.to_ascii_uppercase();
                 for device in &mut online_devices {
                     if mac.eq(&device.mac.to_ascii_uppercase()) {
                         // found device, assign owner
-                        device.set_owner(person.0.clone());
-                        info!("Setting owner for device {} to {}", &device.mac, person.0);
+                        device.set_owner(label.0.clone());
+                        info!("Setting owner for device {} to {}", &device.mac, label.0);
                     }
                 }
             }

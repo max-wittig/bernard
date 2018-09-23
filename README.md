@@ -11,7 +11,7 @@ Inspired by [home assistent](https://www.home-assistant.io/getting-started/prese
 
 ## requirements
 
-* Nmap
+* [Nmap](https://nmap.org/)
 
 ## build
 
@@ -21,7 +21,7 @@ cargo build --release
 
 ## get from crates.io
 
-```
+```bash
 cargo install bernard
 ```
 
@@ -44,4 +44,34 @@ OPTIONS:
     -o, --output <metrics_path>    Output filepath for metrics file, e.g. /var/www/html/metrics.txt [default:
                                    metrics.txt]
     -n, --network <network>        CIDR notation of the network you want to scan, e.g. 192.168.178.1/24
+```
+
+## config example
+
+```yaml
+labels:
+  some-label:
+    - "some-valid-mac"
+  other-label:
+    - "valid-mac"
+    - "another-valid-mac"
+```
+
+## output example
+
+```txt
+
+# HELP devices Devices with status
+# TYPE devices gauge
+devices{hostname="HP60BAG4",mac="00:00:00:00:00:00"} 1
+devices{hostname="BUD2AA99",mac="00:00:00:00:00:00"} 1
+devices{hostname="OnePlus_3",mac="00:00:00:00:00:00"} 1
+devices{hostname="amazon-fdsfds",mac="00:00:00:00:00:00"} 1
+devices{hostname="some.device",mac="00:00:00:00:00:00"} 1
+devices{hostname="otherother-device",mac=""} 1
+devices{hostname="raspberrypi",mac="00:00:00:00:00:00"} 1
+
+# HELP label Label with status
+# TYPE label gauge
+labels{name="some-label"} 1
 ```

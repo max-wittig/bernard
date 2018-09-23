@@ -68,8 +68,8 @@ struct Config {
 impl Config {
     fn is_valid(&self) -> bool {
         // check if mac addresses are valid
-        for person in &self.labels {
-            for address in person.1 {
+        for label in &self.labels {
+            for address in label.1 {
                 match MacAddress::parse_str(address.as_str()) {
                     Ok(r) => r,
                     Err(_) => return false,
@@ -160,15 +160,15 @@ fn main() {
     let scanner = Scanner::new(&opt.network);
     info!("Running nmap to detect devices...");
     let devices_online = scanner.get_labels_online(&config.labels);
-    let people_online: Vec<String> = devices_online
+    let label_online: Vec<String> = devices_online
         .iter()
         .map(|d| d.owner.clone())
         .filter(|o| !o.is_empty())
         .collect();
-    info!("Online: {}", people_online.join(", "));
+    info!("Online: {}", label_online.join(", "));
     let mut label_status_hashmap: HashMap<String, f64> = HashMap::new();
     for label in config.labels {
-        if people_online.contains(&label.0) {
+        if label_online.contains(&label.0) {
             label_status_hashmap.insert(label.0.clone(), 1.0);
         } else {
             label_status_hashmap.insert(label.0.clone(), 0.0);
@@ -183,16 +183,16 @@ fn write_metrics_file(
     metrics_path: &str,
 ) {
     let r = Registry::new();
-    let people_gauge_vec_opts = Opts::new("people", "People online status");
+    let label_gauge_vec_opts = Opts::new("labels", "Label with status");
     let devices_gauge_vec_opts = Opts::new("devices", "Devices with status");
 
-    let people_gauge_vec: GaugeVec = GaugeVec::new(people_gauge_vec_opts, &["name"]).unwrap();
+    let label_gauge_vec: GaugeVec = GaugeVec::new(label_gauge_vec_opts, &["name"]).unwrap();
     let devices_gauge_vec: GaugeVec =
         GaugeVec::new(devices_gauge_vec_opts, &["hostname", "mac"]).unwrap();
-    r.register(Box::new(people_gauge_vec.clone())).unwrap();
+    r.register(Box::new(label_gauge_vec.clone())).unwrap();
     r.register(Box::new(devices_gauge_vec.clone())).unwrap();
     for label in labels {
-        people_gauge_vec
+        label_gauge_vec
             .with_label_values(&[label.0.as_str()])
             .set(*label.1);
     }
