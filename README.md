@@ -19,6 +19,12 @@ Inspired by [home assistent](https://www.home-assistant.io/getting-started/prese
 cargo build --release
 ```
 
+## get from crates.io
+
+```
+cargo install bernard
+```
+
 ## usage
 
 ```txt

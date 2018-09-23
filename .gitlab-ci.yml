@@ -1,0 +1,22 @@
+image: rust:1.29.0
+
+stages:
+  - build
+  - publish
+
+run:
+  stage: build
+  before_script:
+    - cargo build
+  script:
+    - cargo run -- --help
+
+publish:
+  stage: publish
+  before_script:
+    - cargo package
+    - cargo login $CRATES_TOKEN
+  script:
+    - cargo publish
+  only:
+    - tags
