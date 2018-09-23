@@ -1,16 +1,22 @@
 [package]
-name = "network-tracker"
-version = "0.1.0"
-authors = ["Max Wittig <max.wittig95@gmail.com>"]
+name = "bernard"
+version = "0.0.1"
+authors = ["Max Wittig"]
+description = "Presence detection in your network, written in Rust"
+homepage = "https://github.com/max-wittig/bernard"
+repository = "https://github.com/max-wittig/bernard.git"
+readme = "README.md"
+keywords = ["Nmap", "nmap-parser", "homeassistent", "automation"]
+license = "MIT"
 
 [dependencies]
-serde = "*"
-serde_yaml = "*"
-serde_derive = "*"
-xml-rs = "*"
-tempfile = "*"
-log = "*"
-simplelog = "*"
-prometheus = "*"
-structopt = "*"
-eui48 = ""
+serde = "^1.0.79"
+serde_yaml = "^0.8.4"
+serde_derive = "^1.0.79"
+xml-rs = "^0.8.0"
+tempfile = "^3.0.4"
+log = "^0.4.5"
+simplelog = "^0.5.2"
+prometheus = "^0.4.2"
+structopt = "^0.2.10"
+eui48 = "^0.3.2"

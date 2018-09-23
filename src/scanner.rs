@@ -1,7 +1,9 @@
+use std;
 use std::collections::HashMap;
 use std::io::BufReader;
-use std::process::Command;
-use std::net::Ipv4Addr;
+use std::process::exit;
+use std::process::{Command, Stdio};
+use ExitCodes;
 
 use tempfile::NamedTempFile;
 use xml::reader::{EventReader, XmlEvent};
@@ -12,7 +14,7 @@ pub struct Scanner {
 
 #[derive(Debug, Clone)]
 pub struct Device {
-    pub ip: Option<Ipv4Addr>,
+    pub ip: String,
     pub hostname: String,
     pub mac: String,
     pub owner: String,
@@ -21,14 +23,14 @@ pub struct Device {
 impl Device {
     pub fn new() -> Device {
         Device {
-            ip: None,
+            ip: String::new(),
             hostname: String::new(),
             mac: String::new(),
             owner: String::new(),
         }
     }
 
-    pub fn set_ip(&mut self, ip: Option<Ipv4Addr>) {
+    pub fn set_ip(&mut self, ip: String) {
         self.ip = ip
     }
 
@@ -49,14 +51,25 @@ impl Scanner {
     fn get_devices(&self) -> Vec<Device> {
         let file = NamedTempFile::new().unwrap();
         let path = file.path().to_str().unwrap().to_string();
-        Command::new("nmap")
+        match Command::new("nmap")
             .arg("-sn")
             .arg("-PS")
             .arg(self.cidr.as_str())
             .arg("-oX")
             .arg(path)
+            .stdout(Stdio::null())
             .output()
-            .expect("Error, while running nmap");
+        {
+            Ok(r) => r,
+            Err(ref e) if e.kind() == std::io::ErrorKind::NotFound => {
+                error!("Nmap is not installed!");
+                exit(ExitCodes::NmapNotInstalled as i32);
+            }
+            Err(_) => {
+                error!("Error, while running Nmap!");
+                exit(ExitCodes::NmapRunError as i32);
+            }
+        };
 
         let buf_reader = BufReader::new(file.as_file());
         let xml_reader = EventReader::new(buf_reader);
@@ -81,15 +94,13 @@ impl Scanner {
                         for attr in &attributes {
                             if attr.name.local_name.eq("state") && attr.value.eq("up") {
                                 is_online = true;
-                                debug!("Host is online")
+                                debug!("Host is online");
                             }
                         }
                     }
                     if name.local_name.eq("address") {
                         let mut addr_type: Option<String> = None;
                         let mut addr: Option<String> = None;
-                        let mut ip_addr: Option<Ipv4Addr> = None;
-                        let mut mac_addr: Option<String> = None;
                         for attr in &attributes {
                             if attr.name.local_name.eq("addr") {
                                 addr = Some(attr.value.clone());
@@ -100,14 +111,7 @@ impl Scanner {
 
                         match addr_type {
                             Some(ref x) if x.eq("mac") => host.set_mac(addr.unwrap()),
-                            Some(ref x) if x.eq("ipv4") => {
-                                // check if address is really an Ipv4Addr
-                                ip_addr = match x.clone().parse() {
-                                    Ok(a) => Some(a),
-                                    Err(_) => None, //TODO: throw xml error
-                                };
-                                host.set_ip(ip_addr)
-                            },
+                            Some(ref x) if x.eq("ipv4") => host.set_ip(addr.unwrap()),
                             _ => (),
                         }
                         debug!("Found address for host");
@@ -147,12 +151,12 @@ impl Scanner {
         }
     }
 
-    pub fn get_people_online(&self, people_map: &HashMap<String, Vec<String>>) -> Vec<Device> {
+    pub fn get_labels_online(&self, label_map: &HashMap<String, Vec<String>>) -> Vec<Device> {
         let mut online_devices = self.get_devices();
-        for person in people_map {
+        for person in label_map {
             for mac in person.1 {
                 let mac = mac.to_ascii_uppercase();
-                for device in online_devices.iter_mut() {
+                for device in &mut online_devices {
                     if mac.eq(&device.mac.to_ascii_uppercase()) {
                         // found device, assign owner
                         device.set_owner(person.0.clone());
