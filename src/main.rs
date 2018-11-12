@@ -4,7 +4,6 @@ extern crate prometheus;
 #[macro_use]
 extern crate serde_derive;
 extern crate serde_yaml;
-#[macro_use]
 extern crate structopt;
 extern crate eui48;
 extern crate simplelog;
