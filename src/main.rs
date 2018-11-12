@@ -3,10 +3,10 @@ extern crate log;
 extern crate prometheus;
 #[macro_use]
 extern crate serde_derive;
-extern crate serde_yaml;
-extern crate structopt;
 extern crate eui48;
+extern crate serde_yaml;
 extern crate simplelog;
+extern crate structopt;
 extern crate tempfile;
 extern crate xml;
 
@@ -15,13 +15,13 @@ use prometheus::{Encoder, GaugeVec, Opts, Registry, TextEncoder};
 use scanner::Scanner;
 use simplelog::{CombinedLogger, LevelFilter, TermLogger};
 use std::collections::HashMap;
-use std::env;
 use std::fmt;
 use std::fmt::Display;
 use std::fs::File;
 use std::io::prelude::*;
 use std::io::Read;
 use std::process::exit;
+use std::process::Command;
 use structopt::StructOpt;
 
 mod scanner;
@@ -57,6 +57,7 @@ enum ExitCodes {
     NmapNotInstalled = 4,
     NmapRunError = 5,
     ResultWriteError = 6,
+    RootCheckError = 7,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -98,26 +99,42 @@ struct Opt {
     /// Run in quiet mode
     #[structopt(short = "q", long = "quiet")]
     quiet: bool,
+
     /// Verbose mode (-v, -vv, -vvvvv, etc)
     #[structopt(short = "v", long = "verbose", parse(from_occurrences))]
     verbose: usize,
+
     /// Path to config file
     #[structopt(short = "c", long = "config")]
     config: String,
+
     /// CIDR notation of the network you want to scan, e.g. 192.168.178.1/24
     #[structopt(short = "n", long = "network")]
     network: String,
+
     /// Output filepath for metrics file, e.g. /var/www/html/metrics.txt
     #[structopt(short = "o", long = "output", default_value = "metrics.txt")]
     metrics_path: String,
 }
 
 fn is_root() -> bool {
-    match env::var("USER") {
-        Ok(ref val) if val.eq("root") => true,
-        Ok(_) => false,
-        Err(_) => false,
-    }
+    let output = match Command::new("id").arg("-u").output() {
+        Ok(r) => r,
+        Err(_) => {
+            error!("Error, while trying to detect root!");
+            exit(ExitCodes::RootCheckError as i32);
+        }
+    };
+    let user_id: i32 = match String::from_utf8_lossy(&output.stdout)
+        .trim()
+        .parse::<i32>() {
+            Ok(r) => r,
+            Err(_) => {
+                error!("Error, while trying to detect root!");
+                exit(ExitCodes::RootCheckError as i32);
+            }
+        };
+    user_id == 0
 }
 
 fn main() {
