@@ -35,7 +35,7 @@ USAGE:
 
 FLAGS:
     -h, --help       Prints help information
-    -q, --quiet      Quiet mode
+    -q, --quiet      Run in quiet mode
     -V, --version    Prints version information
     -v, --verbose    Verbose mode (-v, -vv, -vvvvv, etc)
 
@@ -44,6 +44,13 @@ OPTIONS:
     -o, --output <metrics_path>    Output filepath for metrics file, e.g. /var/www/html/metrics.txt [default:
                                    metrics.txt]
     -n, --network <network>        CIDR notation of the network you want to scan, e.g. 192.168.178.1/24
+```
+
+## run with docker
+
+```bash
+docker build -t bernard .
+docker run --rm -t --volume /home/your-config.yaml:/opt/bernard/config.yaml --network host bernard -c config.yaml -n 192.168.1.1/24
 ```
 
 ## config example
@@ -74,4 +81,5 @@ devices{hostname="raspberrypi",mac="00:00:00:00:00:00"} 1
 # HELP label Label with status
 # TYPE label gauge
 labels{name="some-label"} 1
+labels{name="other-label"} 0
 ```

@@ -135,8 +135,8 @@ fn main() {
     }
 
     CombinedLogger::init(vec![
-        TermLogger::new(log_level, simplelog::Config::default()).unwrap(),
-    ]).unwrap();
+        TermLogger::new(log_level, simplelog::Config::default()).expect("Could not init TermLogger"),
+    ]).expect("Could not init CombinedLogger");
 
     if !is_root() {
         error!("This program needs to be run as root!");
@@ -185,11 +185,11 @@ fn write_metrics_file(
     let label_gauge_vec_opts = Opts::new("labels", "Label with status");
     let devices_gauge_vec_opts = Opts::new("devices", "Devices with status");
 
-    let label_gauge_vec: GaugeVec = GaugeVec::new(label_gauge_vec_opts, &["name"]).unwrap();
+    let label_gauge_vec: GaugeVec = GaugeVec::new(label_gauge_vec_opts, &["name"]).expect("Could not create Gauge");
     let devices_gauge_vec: GaugeVec =
-        GaugeVec::new(devices_gauge_vec_opts, &["hostname", "mac"]).unwrap();
-    r.register(Box::new(label_gauge_vec.clone())).unwrap();
-    r.register(Box::new(devices_gauge_vec.clone())).unwrap();
+        GaugeVec::new(devices_gauge_vec_opts, &["hostname", "mac"]).expect("Could not create GaugeVec");
+    r.register(Box::new(label_gauge_vec.clone())).expect("Could not register GaugeVec");
+    r.register(Box::new(devices_gauge_vec.clone())).expect("Could not register GaugeVec");
     for label in labels {
         label_gauge_vec
             .with_label_values(&[label.0.as_str()])
@@ -205,7 +205,7 @@ fn write_metrics_file(
     let mut buffer = vec![];
     let encoder = TextEncoder::new();
     let metric_families = r.gather();
-    encoder.encode(&metric_families, &mut buffer).unwrap();
+    encoder.encode(&metric_families, &mut buffer).expect("Could not encode metrics");
     debug!(
         "Exporter file: {}",
         String::from_utf8(buffer.clone()).unwrap()
@@ -219,7 +219,7 @@ fn write_metrics_file(
     };
 
     out_file
-        .write_all(String::from_utf8(buffer).unwrap().as_bytes())
+        .write_all(String::from_utf8(buffer).expect("Could not convert buffer").as_bytes())
         .expect("Could not write output file!");
     info!("Wrote metrics to {}", metrics_path);
 }

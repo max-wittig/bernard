@@ -49,8 +49,8 @@ impl Device {
 
 impl Scanner {
     fn get_devices(&self) -> Vec<Device> {
-        let file = NamedTempFile::new().unwrap();
-        let path = file.path().to_str().unwrap().to_string();
+        let file = NamedTempFile::new().expect("Could not create tempfile");
+        let path = file.path().to_str().expect("Could not find tempfile").to_string();
         match Command::new("nmap")
             .arg("-sn")
             .arg("-PS")
@@ -130,7 +130,7 @@ impl Scanner {
                 Ok(XmlEvent::EndElement { name }) => {
                     if name.local_name.eq("host") {
                         if is_online {
-                            hosts.push(current_host.clone().unwrap());
+                            hosts.push(current_host.clone().expect("Could not clone host"));
                         }
                         is_online = false;
                     }
