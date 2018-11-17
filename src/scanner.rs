@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::io::BufReader;
 use std::process::exit;
 use std::process::{Command, Stdio};
-use ExitCodes;
+use crate::ExitCodes;
 
 use tempfile::NamedTempFile;
 use xml::reader::{EventReader, XmlEvent};

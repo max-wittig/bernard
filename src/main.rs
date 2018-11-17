@@ -12,7 +12,7 @@ extern crate xml;
 
 use eui48::MacAddress;
 use prometheus::{Encoder, GaugeVec, Opts, Registry, TextEncoder};
-use scanner::Scanner;
+use crate::scanner::Scanner;
 use simplelog::{CombinedLogger, LevelFilter, TermLogger};
 use std::collections::HashMap;
 use std::fmt;
