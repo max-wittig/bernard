@@ -3,26 +3,25 @@ extern crate log;
 extern crate prometheus;
 #[macro_use]
 extern crate serde_derive;
-extern crate serde_yaml;
-#[macro_use]
-extern crate structopt;
 extern crate eui48;
+extern crate serde_yaml;
 extern crate simplelog;
+extern crate structopt;
 extern crate tempfile;
 extern crate xml;
 
 use eui48::MacAddress;
 use prometheus::{Encoder, GaugeVec, Opts, Registry, TextEncoder};
-use scanner::Scanner;
+use crate::scanner::Scanner;
 use simplelog::{CombinedLogger, LevelFilter, TermLogger};
 use std::collections::HashMap;
-use std::env;
 use std::fmt;
 use std::fmt::Display;
 use std::fs::File;
 use std::io::prelude::*;
 use std::io::Read;
 use std::process::exit;
+use std::process::Command;
 use structopt::StructOpt;
 
 mod scanner;
@@ -58,6 +57,7 @@ enum ExitCodes {
     NmapNotInstalled = 4,
     NmapRunError = 5,
     ResultWriteError = 6,
+    RootCheckError = 7,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -99,26 +99,42 @@ struct Opt {
     /// Run in quiet mode
     #[structopt(short = "q", long = "quiet")]
     quiet: bool,
+
     /// Verbose mode (-v, -vv, -vvvvv, etc)
     #[structopt(short = "v", long = "verbose", parse(from_occurrences))]
     verbose: usize,
+
     /// Path to config file
     #[structopt(short = "c", long = "config")]
     config: String,
+
     /// CIDR notation of the network you want to scan, e.g. 192.168.178.1/24
     #[structopt(short = "n", long = "network")]
     network: String,
+
     /// Output filepath for metrics file, e.g. /var/www/html/metrics.txt
     #[structopt(short = "o", long = "output", default_value = "metrics.txt")]
     metrics_path: String,
 }
 
 fn is_root() -> bool {
-    match env::var("USER") {
-        Ok(ref val) if val.eq("root") => true,
-        Ok(_) => false,
-        Err(_) => false,
-    }
+    let output = match Command::new("id").arg("-u").output() {
+        Ok(r) => r,
+        Err(_) => {
+            error!("Error, while trying to detect root!");
+            exit(ExitCodes::RootCheckError as i32);
+        }
+    };
+    let user_id: i32 = match String::from_utf8_lossy(&output.stdout)
+        .trim()
+        .parse::<i32>() {
+            Ok(r) => r,
+            Err(_) => {
+                error!("Error, while trying to detect root!");
+                exit(ExitCodes::RootCheckError as i32);
+            }
+        };
+    user_id == 0
 }
 
 fn main() {
@@ -136,8 +152,8 @@ fn main() {
     }
 
     CombinedLogger::init(vec![
-        TermLogger::new(log_level, simplelog::Config::default()).unwrap(),
-    ]).unwrap();
+        TermLogger::new(log_level, simplelog::Config::default()).expect("Could not init TermLogger"),
+    ]).expect("Could not init CombinedLogger");
 
     if !is_root() {
         error!("This program needs to be run as root!");
@@ -186,11 +202,11 @@ fn write_metrics_file(
     let label_gauge_vec_opts = Opts::new("labels", "Label with status");
     let devices_gauge_vec_opts = Opts::new("devices", "Devices with status");
 
-    let label_gauge_vec: GaugeVec = GaugeVec::new(label_gauge_vec_opts, &["name"]).unwrap();
+    let label_gauge_vec: GaugeVec = GaugeVec::new(label_gauge_vec_opts, &["name"]).expect("Could not create Gauge");
     let devices_gauge_vec: GaugeVec =
-        GaugeVec::new(devices_gauge_vec_opts, &["hostname", "mac"]).unwrap();
-    r.register(Box::new(label_gauge_vec.clone())).unwrap();
-    r.register(Box::new(devices_gauge_vec.clone())).unwrap();
+        GaugeVec::new(devices_gauge_vec_opts, &["hostname", "mac"]).expect("Could not create GaugeVec");
+    r.register(Box::new(label_gauge_vec.clone())).expect("Could not register GaugeVec");
+    r.register(Box::new(devices_gauge_vec.clone())).expect("Could not register GaugeVec");
     for label in labels {
         label_gauge_vec
             .with_label_values(&[label.0.as_str()])
@@ -206,7 +222,7 @@ fn write_metrics_file(
     let mut buffer = vec![];
     let encoder = TextEncoder::new();
     let metric_families = r.gather();
-    encoder.encode(&metric_families, &mut buffer).unwrap();
+    encoder.encode(&metric_families, &mut buffer).expect("Could not encode metrics");
     debug!(
         "Exporter file: {}",
         String::from_utf8(buffer.clone()).unwrap()
@@ -220,7 +236,7 @@ fn write_metrics_file(
     };
 
     out_file
-        .write_all(String::from_utf8(buffer).unwrap().as_bytes())
+        .write_all(String::from_utf8(buffer).expect("Could not convert buffer").as_bytes())
         .expect("Could not write output file!");
     info!("Wrote metrics to {}", metrics_path);
 }
