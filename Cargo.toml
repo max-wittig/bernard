@@ -1,6 +1,6 @@
 [package]
 name = "bernard"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Max Wittig"]
 description = "Presence detection in your network, written in Rust"
 homepage = "https://github.com/max-wittig/bernard"
